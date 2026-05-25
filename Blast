@@ -1,0 +1,21 @@
+cat > plot_blast_dotplot.R << 'EOF'
+# 读取 BLAST 输出（假设 tab 分隔，无表头）
+blast <- read.table("synteny.blast.out", sep="\t", 
+                    col.names=c("qseqid","sseqid","pident","length","mismatch","gapopen",
+                                "qstart","qend","sstart","send","evalue","bitscore"))
+
+# 为每个 contig 绘制子图（或合并绘制）
+library(ggplot2)
+p <- ggplot(blast, aes(x=qstart, y=sstart, color=qseqid)) +
+     geom_point(alpha=0.5, size=0.8) +
+     facet_wrap(~qseqid, scales="free") +
+     labs(x="Query coordinate (contig)", y="Reference coordinate (CP014529_1)") +
+     theme_minimal() +
+     theme(legend.position="none")
+ggsave("blast_dotplot.pdf", p, width=10, height=8)
+cat("Dotplot saved to blast_dotplot.pdf\n")
+EOF
+
+# 运行 R 脚本（需加载 R 模块）
+module load R/4.5.1-gfbf-2024a
+Rscript plot_blast_dotplot.R

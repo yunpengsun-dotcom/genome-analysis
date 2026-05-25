@@ -1,0 +1,116 @@
+#!/bin/bash -l
+#SBATCH -A uppmax2026-1-61
+#SBATCH -p pelle
+#SBATCH -c 2
+#SBATCH --mem=8G
+#SBATCH -t 01:00:00
+#SBATCH -J DESeq2_analysis
+#SBATCH --mail-type=ALL
+#SBATCH --output=DESeq2_%j.out
+
+module load R/4.5.1-gfbf-2024a
+cd /home/sunyp/genome-analysis/11_RNAseq_alignment/alignment_results
+
+Rscript --vanilla -e '
+library(DESeq2)
+library(ggplot2)
+library(pheatmap)
+library(dplyr)
+library(tidyr)
+
+counts_file <- "counts_simple.txt"
+countData <- read.table(counts_file, header = TRUE, row.names = 1, check.names = FALSE)
+cat("Original column names:\n")
+print(colnames(countData))
+
+# 
+clean_names <- gsub("^BH/|^Serum/", "", colnames(countData))
+colnames(countData) <- clean_names
+cat("\nCleaned column names:\n")
+print(clean_names)
+
+# 
+sample_names <- colnames(countData)
+condition <- ifelse(grepl("^BH_", sample_names), "BH",
+             ifelse(grepl("^Serum_", sample_names), "Serum", NA))
+if (any(is.na(condition))) {
+  stop("Some sample names do not start with BH_ or Serum_: ",
+       paste(sample_names[is.na(condition)], collapse = ", "))
+}
+cat("\nSample groups:\n")
+print(data.frame(Sample = sample_names, Condition = condition))
+# 构建 colData
+colData <- data.frame(row.names = sample_names, condition = factor(condition, levels = c("BH", "Serum")))
+
+#
+countData <- round(countData)
+dds <- DESeqDataSetFromMatrix(countData, colData, design = ~ condition)
+
+# 
+keep <- rowSums(counts(dds) >= 10) >= 3
+dds <- dds[keep, ]
+cat("\nGenes after filtering:", nrow(dds), "\n")
+
+# 
+dds <- DESeq(dds)
+res <- results(dds, contrast = c("condition", "Serum", "BH"))
+res <- res[order(res$padj), ]
+
+# 
+write.csv(as.data.frame(res), "DESeq2_results_full.csv")
+cat("Full results saved to DESeq2_results_full.csv\n")
+
+# 
+sig <- subset(res, padj < 0.05 & abs(log2FoldChange) > 1)
+write.csv(as.data.frame(sig), "DESeq2_significant_genes.csv")
+cat("Significant genes (|log2FC|>1, padj<0.05):", nrow(sig), "\n")
+cat("Up-regulated:", sum(sig$log2FoldChange > 1, na.rm=TRUE), "\n")
+cat("Down-regulated:", sum(sig$log2FoldChange < -1, na.rm=TRUE), "\n")
+
+# 
+pdf("MA_plot.pdf")
+plotMA(res, main = "MA Plot (Serum vs BH)", ylim = c(-5,5))
+dev.off()
+
+# 
+res_df <- as.data.frame(res)
+res_df$gene <- rownames(res_df)
+res_df$sig <- ifelse(res_df$padj < 0.05 & abs(res_df$log2FoldChange) > 1,
+                     ifelse(res_df$log2FoldChange > 1, "Up", "Down"), "NotSig")
+volcano <- ggplot(res_df, aes(x = log2FoldChange, y = -log10(padj), color = sig)) +
+    geom_point(alpha = 0.6, size = 1.5) +
+    scale_color_manual(values = c("Up"="red","Down"="blue","NotSig"="gray")) +
+    theme_minimal() + labs(title = "Volcano Plot (Serum vs BH)") +
+    geom_vline(xintercept = c(-1,1), linetype = "dashed") +
+    geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
+    theme(legend.title = element_blank())
+ggsave("Volcano_plot.pdf", volcano, width = 8, height = 6)
+
+# 
+if (nrow(sig) > 1) {
+    vsd <- vst(dds, blind = FALSE)
+    mat <- assay(vsd)[rownames(sig), ]
+    annotation_col <- data.frame(Condition = colData(dds)$condition)
+    rownames(annotation_col) <- colnames(mat)
+    pheatmap(mat, annotation_col = annotation_col, scale = "row",
+             show_rownames = FALSE, main = "Significant Genes (Serum vs BH)",
+             filename = "Heatmap_significant_genes.pdf", width = 10, height = 12)
+} else {
+    cat("No significant genes to plot heatmap.\n")
+}
+
+# PCA 
+vsd <- vst(dds, blind = FALSE)
+pcaData <- plotPCA(vsd, intgroup = "condition", returnData = TRUE)
+percentVar <- round(100 * attr(pcaData, "percentVar"))
+pca_plot <- ggplot(pcaData, aes(x = PC1, y = PC2, color = condition)) +
+    geom_point(size = 4) +
+    xlab(paste0("PC1: ", percentVar[1], "% variance")) +
+    ylab(paste0("PC2: ", percentVar[2], "% variance")) +
+    theme_minimal() + ggtitle("PCA of Samples (Serum vs BH)")
+ggsave("PCA_plot.pdf", pca_plot, width = 6, height = 5)
+
+cat("\nDESeq2 analysis completed successfully!\n")
+cat("Output files: DESeq2_results_full.csv, DESeq2_significant_genes.csv, MA_plot.pdf, Volcano_plot.pdf, PCA_plot.pdf\n")
+if (nrow(sig) > 1) cat("Heatmap_significant_genes.pdf\n")
+'

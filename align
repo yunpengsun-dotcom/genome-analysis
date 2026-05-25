@@ -1,0 +1,86 @@
+#!/bin/bash -l
+#SBATCH -A uppmax2026-1-61
+#SBATCH -p pelle
+#SBATCH -c 2
+#SBATCH -t 7:00:00
+#SBATCH -J RNAseq_align_count
+#SBATCH --mail-type=ALL
+#SBATCH --output=%x.%j.out
+
+module load BWA/0.7.17-GCCcore-13.3.0
+module load SAMtools/1.21-GCC-13.3.0
+module load Subread/2.1.1-GCC-13.3.0
+
+GENOME="/home/sunyp/genome-analysis/01_DNA_asssembly_PacBio/canu_output/assembly/efm.contigs.fasta"
+GTF="/home/sunyp/genome-analysis/01_DNA_asssembly_PacBio/canu_output/assembly/prokka_output/efm_annotation.gff"
+
+BH_TRIMMED="/home/sunyp/RNAseq_raw_data/RNA-Seq_BH/trimmed"
+SERUM_TRIMMED="/home/sunyp/RNAseq_raw_data/RNA-Seq_Serum/trimmed"
+
+OUT_BASE="/home/sunyp/genome-analysis/11_RNAseq_alignment/alignment_results"
+mkdir -p $OUT_BASE
+BH_OUT="${OUT_BASE}/BH"
+SERUM_OUT="${OUT_BASE}/Serum"
+mkdir -p $BH_OUT $SERUM_OUT
+
+process_condition() {
+    local TRIMMED_DIR=$1
+    local OUT_DIR=$2
+    local COND_TAG=$3
+
+    echo "Processing $COND_TAG samples from $TRIMMED_DIR"
+
+    for R1 in $TRIMMED_DIR/*_pass_1.fastq.gz; do
+        [ -f "$R1" ] || continue
+        ORIG_BASE=$(basename $R1 _pass_1.fastq.gz)
+        NEW_BASE="${COND_TAG}_${ORIG_BASE}"
+        R2="$TRIMMED_DIR/${ORIG_BASE}_pass_2.fastq.gz"
+
+        BAM_UNSORTED="${OUT_DIR}/${NEW_BASE}.unsorted.bam"
+        BAM_SORTED="${OUT_DIR}/${NEW_BASE}.bam"
+
+        echo "Aligning $ORIG_BASE (${COND_TAG})"
+
+        if [ -f "$R2" ]; then
+            bwa mem -t 4 $GENOME $R1 $R2 | samtools view -bS - > $BAM_UNSORTED
+        else
+            bwa mem -t 4 $GENOME $R1 | samtools view -bS - > $BAM_UNSORTED
+        fi
+
+        samtools sort -o $BAM_SORTED $BAM_UNSORTED
+        rm $BAM_UNSORTED
+        samtools index $BAM_SORTED
+    done
+}
+
+process_condition "$BH_TRIMMED" "$BH_OUT" "BH"
+process_condition "$SERUM_TRIMMED" "$SERUM_OUT" "Serum"
+
+
+echo "Running featureCounts to generate count matrix..."
+
+ALL_BAMS=$(find $OUT_BASE -name "*.bam" | sort)
+if [ -z "$ALL_BAMS" ]; then
+    echo "ERROR: No BAM files found in $OUT_BASE"
+    exit 1
+fi
+
+COUNT_MATRIX="${OUT_BASE}/counts.txt"
+
+featureCounts \
+    -a $GTF \
+    -o $COUNT_MATRIX \
+    -g ID \
+    -t CDS \
+    -T 4 \
+    -s 0 \
+    --ignoreDup \
+    $ALL_BAMS
+
+cut -f1,7- $COUNT_MATRIX | sed '1s/\t/\n/' | grep -v "^#" > ${OUT_BASE}/counts_simple.txt
+
+echo "========================================="
+echo "All done!"
+echo "Count matrix: $COUNT_MATRIX"
+echo "Simplified:   ${OUT_BASE}/counts_simple.txt"
+echo "========================================="

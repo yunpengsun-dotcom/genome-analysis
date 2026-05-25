@@ -1,0 +1,55 @@
+#!/bin/sh
+
+
+#  Paths to things we run.
+
+bin="/sw/arch/eb/software/canu/2.3-GCCcore-13.3.0-Java-17/bin"
+
+pn=/sw/arch/eb/software/Perl/5.38.2-GCCcore-13.3.0/bin/perl
+pe=`command -v $pn`
+pv=`command    $pn --version | grep version`
+
+jn=/sw/arch/eb/software/Java/17.0.15/bin/java
+je=`command -v $jn`
+jv=`command    $jn -showversion 2>&1 | head -n 1`
+
+cn=/sw/arch/eb/software/canu/2.3-GCCcore-13.3.0-Java-17/bin/canu
+ce=`command -v $cn`
+cv=`command    $cn -version`
+
+#  Report paths.
+
+echo ""
+echo "Found perl (from '$pn'):"
+echo "  $pe"
+echo "  $pv"
+echo ""
+echo "Found java (from '$jn'):"
+echo "  $je"
+echo "  $jv"
+echo ""
+echo "Found canu (from '$cn'):"
+echo "  $ce"
+echo "  $cv"
+echo ""
+
+#  Environment for any object storage.
+
+export CANU_OBJECT_STORE_CLIENT=
+export CANU_OBJECT_STORE_CLIENT_UA=
+export CANU_OBJECT_STORE_CLIENT_DA=
+export CANU_OBJECT_STORE_NAMESPACE=
+export CANU_OBJECT_STORE_PROJECT=
+/sw/arch/eb/software/canu/2.3-GCCcore-13.3.0-Java-17/bin/sqStoreCreate \
+  -o ./efm.seqStore.BUILDING \
+  -minlength 1000 \
+  -genomesize 3000000 \
+  -coverage   200 \
+  -bias       0 \
+  -corrected -pacbio efm.correctedReads /gorilla/home/sunyp/genome-analysis/01_DNA_asssembly_PacBio/canu_output/efm.correctedReads.fasta.gz \
+&& \
+mv ./efm.seqStore.BUILDING ./efm.seqStore \
+&& \
+exit 0
+
+exit 1

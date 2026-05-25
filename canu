@@ -1,0 +1,24 @@
+#!/bin/bash -l
+#SBATCH -A uppmax2026-1-61
+#SBATCH -p pelle
+#SBATCH -c 2
+#SBATCH -t 02:30:00
+#SBATCH -J pacbio_assembly
+#SBATCH --mail-type=ALL
+#SBATCH --output=%x.%j.out
+
+module load SAMtools/1.22.1-GCC-13.3.0
+module load canu/2.3-GCCcore-13.3.0-Java-17
+module list
+
+cd /home/sunyp/genome-analysis/1_Zhang_2017/genomics_data/PacBio
+
+canu -p efm -d /home/sunyp/genome-analysis/01_DNA_asssembly_PacBio/canu_output \
+  genomeSize=3.0m \
+  useGrid=false \
+  maxThreads=2 \
+  corThreads=2 \
+  oeaThreads=2 \
+  cnsThreads=2 \
+  -pacbio-raw *.subreads.fastq.gz \
+  -bamOutput=false

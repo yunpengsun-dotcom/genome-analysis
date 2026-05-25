@@ -1,0 +1,40 @@
+#!/bin/bash -l
+#SBATCH -A uppmax2026-1-61
+#SBATCH -p pelle
+#SBATCH -c 2
+#SBATCH -t 06:00:00
+#SBATCH -J RNAseq_preprocessing
+#SBATCH --output=RNAseq_preprocessing_%j.out
+
+# Load modules
+module load Trimmomatic
+module load FastQC
+
+# Output directory
+OUTDIR=/home/sunyp/genome-analysis/10_RNAseq_preprocessing
+mkdir -p $OUTDIR
+
+# Raw data directories
+SAMPLES=(RNA-Seq_BH RNA-Seq_Serum)
+BASEDIR=/home/sunyp/genome-analysis/1_Zhang_2017/transcriptomics_data
+
+# Loop through each sample folder
+for SAMPLE in "${SAMPLES[@]}"; do
+    RAWDIR="$BASEDIR/$SAMPLE/raw"
+
+    for R1 in $RAWDIR/*_1.fastq.gz; do
+        R2=${R1/_1.fastq.gz/_2.fastq.gz}
+        BASE=$(basename $R1 _1.fastq.gz)
+        echo "Processing $BASE ..."
+
+        # Trimmomatic
+        trimmomatic PE -threads 1 \
+          $R1 $R2 \
+          $OUTDIR/${BASE}_R1_paired.fq.gz $OUTDIR/${BASE}_R1_unpaired.fq.gz \
+          $OUTDIR/${BASE}_R2_paired.fq.gz $OUTDIR/${BASE}_R2_unpaired.fq.gz \
+          ILLUMINACLIP:TruSeq3-PE.fa:2:30:10 LEADING:3 TRAILING:3 SLIDINGWINDOW:4:15 MINLEN:36
+
+        # FastQC
+        fastqc $OUTDIR/${BASE}_R1_paired.fq.gz $OUTDIR/${BASE}_R2_paired.fq.gz -o $OUTDIR
+    done
+done

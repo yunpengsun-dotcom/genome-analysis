@@ -1,0 +1,46 @@
+# 
+makeblastdb -in CP014529.1.fasta -dbtype nucl -out ref_db
+
+# BLASTN
+blastn -query efm.contigs.fasta -db ref_db -out synteny.blast.out -outfmt 6 -evalue 1e-5 -num_threads 4
+
+#fastqc
+module load FastQC/0.11.9
+fastqc raw/*.fastq.gz -o raw_fastqc
+
+
+#QUAST
+module load QUAST/5.2.0
+quast.py efm.contigs.fasta -o quast_results --gene-finding --rna-finding
+
+#egg
+#!/bin/bash -l
+#SBATCH -A uppmax2026-1-61
+#SBATCH -p pelle
+#SBATCH -c 2
+#SBATCH -t 14:00:00
+#SBATCH -J eggNOG_annotation
+#SBATCH --mail-type=ALL
+#SBATCH --output=%x.%j.out
+
+module load eggnog-mapper
+
+echo "Job started at: $(date)"
+
+cd /home/sunyp/genome-analysis/01_DNA_asssembly_PacBio/canu_output/assembly/prokka_output
+
+mkdir -p eggnog_output
+
+# 指定 eggNOG 数据库路径
+DATA_DIR="/home/sunyp/genome-analysis/01_DNA_asssembly_PacBio/resources/eggnog-mapper"
+
+# 运行 eggNOG‑mapper
+emapper.py -i efm_annotation.faa \
+           -o eggnog_output/efm \
+           --cpu 2 \
+           --data-dir $DATA_DIR \
+           --hmmer
+
+echo "Job finished at: $(date)"
+
+

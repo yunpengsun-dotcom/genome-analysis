@@ -1,0 +1,10 @@
+prokka \
+--outdir prokka_output \
+--prefix efm_annotation \
+--kingdom Bacteria \
+--genus Enterococcus \
+--species faecium \
+--strain EFM \
+--cpus 16 \
+--force \
+efm.contigs.fasta

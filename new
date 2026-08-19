@@ -1,0 +1,61 @@
+#fastqc_RNA.sh
+#!/bin/bash -l
+
+#SBATCH -A uppmax2026-1-61
+#SBATCH -p pelle
+#SBATCH -c 2
+#SBATCH -t 03:00:00
+#SBATCH -J fastqc_RNA
+#SBATCH --output=fastqc_RNA_%j.out
+
+
+module load FastQC
+
+
+mkdir -p ../QC/RNA_before_trim
+mkdir -p ../QC/RNA_after_trim
+
+
+# FastQC before trimming: raw reads
+
+fastqc \
+../raw_data/RNA_BH/*.fastq.gz \
+-o ../QC/RNA_before_trim/
+
+
+fastqc \
+../raw_data/RNA_Serum/*.fastq.gz \
+-o ../QC/RNA_before_trim/
+
+
+# FastQC after trimming: paired reads only
+
+fastqc \
+/proj/uppmax2026-1-61/uppmax2026-1-61/Genome_Analysis/1_Zhang_2017/transcriptomics_data/RNA-Seq_BH/trimmed/trim_paired*.fastq.gz \
+-o ../QC/RNA_after_trim/
+
+
+fastqc \
+/proj/uppmax2026-1-61/uppmax2026-1-61/Genome_Analysis/1_Zhang_2017/transcriptomics_data/RNA-Seq_Serum/trimmed/trim_paired*.fastq.gz \
+-o ../QC/RNA_after_trim/
+
+
+#prokka.sh
+#!/bin/bash -l
+
+#SBATCH -A uppmax2026-1-61
+#SBATCH -p pelle
+#SBATCH -c 4
+#SBATCH -t 04:00:00
+#SBATCH -J prokka
+#SBATCH --output=prokka_%j.out
+
+module load prokka/1.14.5-gompi-2024a
+
+
+
+prokka \
+--outdir ../annotation/prokka_new \
+--prefix efm_annotation \
+--cpus 4 \
+/home/sunyp/genome-analysis/01_DNA_asssembly_PacBio/canu_output/assembly/efm.contigs.fasta

@@ -59,3 +59,61 @@ prokka \
 --prefix efm_annotation \
 --cpus 4 \
 /home/sunyp/genome-analysis/01_DNA_asssembly_PacBio/canu_output/assembly/efm.contigs.fasta
+
+#QUAST
+#!/bin/bash -l
+
+#SBATCH -A uppmax2026-1-61
+#SBATCH -p pelle
+#SBATCH -c 4
+#SBATCH -t 02:00:00
+#SBATCH -J quast
+#SBATCH --output=quast_%j.out
+
+
+module load QUAST
+
+
+mkdir -p ../results/quast
+
+
+# Genome assembly evaluation
+# Input: Canu assembled genome fasta
+
+quast.py \
+/home/sunyp/genome-analysis/01_DNA_asssembly_PacBio/canu_output/assembly/efm.contigs.fasta \
+-o ../results/quast
+
+#ACT
+#!/bin/bash -l
+
+#SBATCH -A uppmax2026-1-61
+#SBATCH -p pelle
+#SBATCH -c 4
+#SBATCH -t 01:00:00
+#SBATCH -J blast_synteny
+#SBATCH --output=blast_synteny_%j.out
+
+
+module load BLAST+
+
+
+mkdir -p ../synteny
+
+
+# Create BLAST database from closely related genome
+makeblastdb \
+-in /home/sunyp/genome-analysis/01_DNA_asssembly_PacBio/canu_output/assembly/prokka_output/sequence.fasta \
+-dbtype nucl \
+-out ../synteny/E745_db
+
+
+# Genome-to-genome comparison
+blastn \
+-query /home/sunyp/genome-analysis/01_DNA_asssembly_PacBio/canu_output/assembly/efm.contigs.fasta \
+-db ../synteny/E745_db \
+-out ../synteny/synteny.blast.out \
+-evalue 1e-10 \
+-outfmt 6 \
+-perc_identity 90 \
+-num_threads 4

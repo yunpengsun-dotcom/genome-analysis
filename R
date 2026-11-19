@@ -1,0 +1,88 @@
+
+Sys.setlocale("LC_TIME", "C")
+options(java.parameters = c("-Duser.language=en", "-Duser.country=US"))
+
+library(rJava)
+library(rmcfs)
+library(R.ROSETTA)
+library(csVisuNet)
+library(arcdiagram)
+
+# 1. 读入数据
+cat("\n>>> 请在弹出的窗口中选择 Project3.csv...\n")
+data <- read.csv(file.choose(), stringsAsFactors = FALSE, check.names = FALSE)
+data$protectionStatus <- as.factor(data$protectionStatus)
+
+# 2. MCFS 特征选择
+set.seed(123)
+mcfs_result <- mcfs(
+  protectionStatus ~ ., data = data,
+  projections = 1500, projectionSize = 0.1, splits = 5, splitSetSize = 30,
+  cutoffPermutations = 20, cutoffMethod = "permutations", threadsNumber = 1
+)
+top12 <- mcfs_result$RI$attribute[1:12]
+rosetta_data <- data[, c(top12, "protectionStatus")]
+
+# 3. R.ROSETTA 模型
+set.seed(123)
+rosetta_model <- rosetta(
+  rosetta_data, discrete = FALSE, discreteMethod = "EqualFrequency",
+  discreteParam = 3, reducer = "Johnson", clroc = "Prot", roc = TRUE, seed = 123
+)
+
+
+library(R.ROSETTA)
+
+cat("\n>>> 正在使用官方 plotMeanROC() 生成 ROC 曲线...\n")
+
+png("C:/Project3_Work/Official_MeanROC.png", width = 1000, height = 900, res = 120)
+
+# 2. 调用官方函数 
+plotMeanROC(rosetta_model)
+
+# 3. 关闭画板
+dev.off()
+
+cat(">>> 官方 ROC 图已保存至：C:/Project3_Work/Official_MeanROC.png\n")
+# ==============================================================================
+# 4. 官方 visunet 生成网页图
+# ==============================================================================
+cat("\n>>> 正在生成 visunet 网页图...\n")
+vis <- visunet(rosetta_model$main, NodeSizeMetric = 'S')
+cat(">>> 网页图已弹出，请在 Viewer 面板查看并截图！\n")
+cat(">>> 截图完成后，回到控制台点击红色 Stop 按钮继续。\n")
+
+# ==============================================================================
+# 5. 官方 visuArc 生成弧线图
+# ==============================================================================
+library(csVisuNet)
+
+# 确保 vis 对象存在
+if (!exists("vis")) {
+  stop("vis 对象不存在，请先运行 visunet() 生成它。")
+}
+
+cat("\n>>> 正在使用官方函数画图...\n")
+
+# 画 Prot 组
+png("C:/Project3_Work/R43_Prot.png", width = 1200, height = 800, res = 120)
+tryCatch({
+  visuArc(vis, decision = "Prot")
+  cat(">>> Prot 组成功！\n")
+}, error = function(e) {
+  # 如果 decision 参数不行，尝试用 dec 参数
+  visuArc(vis, dec = "Prot")
+})
+dev.off()
+
+# 画 NonProt 组
+png("C:/Project3_Work/R43_NonProt.png", width = 1200, height = 800, res = 120)
+tryCatch({
+  visuArc(vis, decision = "NonProt")
+  cat(">>> NonProt 组成功！\n")
+}, error = function(e) {
+  visuArc(vis, dec = "NonProt")
+})
+dev.off()
+
+cat(">>> 画图结束！请去 C:/Project3_Work 查看 R43_ 开头的图片。\n")
